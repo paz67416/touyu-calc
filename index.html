@@ -48,16 +48,17 @@
   .card h2{font-family:var(--mincho);font-size:18px;font-weight:700;margin:0 0 12px;line-height:1.5;}
   .hint{font-size:13.5px;color:var(--ink-soft);margin:0 0 10px;}
   .mini{font-size:13px;color:var(--ink-soft);margin:8px 0 0;}
-  label.field{display:block;font-size:13.5px;color:var(--ink-soft);margin:0 0 12px;}
-  label.field span{display:block;margin-bottom:4px;}
+  .field{display:block;font-size:13.5px;color:var(--ink-soft);margin:0 0 12px;}
+  .field>span,.field>label{display:block;margin-bottom:4px;}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
   .two>*{min-width:0;}
   input{min-width:0;}
   input[type="text"],input[type="number"]{width:100%;font-family:inherit;font-size:16px;color:var(--ink);background:#fff;border:1.5px solid var(--line-input);border-radius:12px;padding:11px 12px;min-height:48px;}
-  input:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+  input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
   input[aria-invalid="true"]{border-color:var(--red);}
   .unit{display:flex;align-items:center;gap:8px;}
   .unit input{flex:1;}
+  .unit select{min-height:44px;flex:none;font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line-input);border-radius:8px;padding:0 4px;}
   .unit em{font-style:normal;font-size:14px;color:var(--ink-soft);white-space:nowrap;}
   .range{margin:4px 0 2px;}
   input[type="range"]{width:100%;accent-color:var(--accent2);height:36px;margin:0;}
@@ -95,6 +96,7 @@
   footer p{margin:0 0 6px;}
   footer .lab{text-align:center;margin-top:14px;letter-spacing:0.08em;}
   @media (max-width:300px){ .two,.grid{grid-template-columns:1fr;} }
+  @media (max-width:420px){ .use-and-price{grid-template-columns:1fr;} }
   @media (prefers-reduced-motion:no-preference){ .card,.status{animation:fadeUp .4s ease both;} }
   @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 </style>
@@ -132,15 +134,22 @@
     <p class="mini">強と弱の数字の間を、目盛りの位置で割り振っています。部屋が暖まったあとは弱で動く時間が長いので、迷ったら「中」より少し弱めが目安です。</p>
 
     <h2 style="margin-top:22px;">3. 使う時間と灯油の値段</h2>
-    <div class="two">
+    <div class="two use-and-price">
       <label class="field"><span>1日に使う時間</span>
         <div class="unit"><input type="text" inputmode="decimal" id="hours" value="8" autocomplete="off"><em>時間</em></div>
       </label>
-      <label class="field"><span>灯油の値段（18L）</span>
-        <div class="unit"><input type="text" inputmode="numeric" id="price18" value="2000" autocomplete="off"><em>円</em></div>
-      </label>
+      <div class="field">
+        <label for="price18">灯油の値段</label>
+        <div class="unit">
+          <input type="text" inputmode="decimal" id="price18" value="2000" autocomplete="off">
+          <select id="priceUnit" aria-label="灯油の値段の単位">
+            <option value="18">円/18L</option>
+            <option value="1">円/L</option>
+          </select>
+        </div>
+      </div>
     </div>
-    <p class="mini">値段は18Lあたりで、いつも買う店のレシートか店頭の表示を入れてください。1Lの値段しか分からないときは18倍した数字を入れます（110円/Lなら1,980円）。</p>
+    <p class="mini">店頭やレシートの表示に合わせて単位を選んでください。1Lが110円なら「円/L」に切り替えて110と入力します。</p>
     <p class="err" id="err" aria-live="polite"></p>
   </section>
 
@@ -186,7 +195,7 @@
 
   <footer>
     <p>計算は、入れた数字をそのまま使った目安です。実際の消費量は、部屋の広さや断熱、外の気温、設定温度、機器の状態で変わります。灯油の扱いと保管は、機器の取扱説明書と灯油の容器の注意書きに従ってください。</p>
-    <p>お試し版 v1.1.0。1枚のHTMLで動き、入力した内容は保存も送信もしません。</p>
+    <p>お試し版 v1.1.1。1枚のHTMLで動き、入力した内容は保存も送信もしません。</p>
     <p class="lab">余白の実験室</p>
   </footer>
 </div>
@@ -234,6 +243,10 @@
   const fmx = (n, d) => n.toLocaleString('ja-JP', { maximumFractionDigits: d });   // 小数は必要な桁だけ
   const yen = n => Math.round(n).toLocaleString('ja-JP') + '円';
   const state = { max: 0.30, min: 0.07, p: 50, hours: 8, price18: 2000 };
+  const priceInput = $('price18');
+  const priceUnit = $('priceUnit');
+  let activePriceUnit = priceUnit.value;
+  const priceInputs = { '18': priceInput.value, '1': '' };
 
   function read(){
     const errs = [];
@@ -244,7 +257,7 @@
       const bad = !(v >= 0) || v > lim;
       el.setAttribute('aria-invalid', bad ? 'true' : 'false');
       if(bad) errs.push(name + 'は0〜' + lim.toLocaleString('ja-JP') + 'の数字で入れてください。');
-      else state[key] = v;
+      else state[key] = key === 'price18' && priceUnit.value === '1' ? v * 18 : v;
     });
     state.p = +$('power').value;
     return errs;
@@ -277,17 +290,20 @@
       ['1か月（30日）の灯油代', yen(r.cost30)],
     ];
     $('grid').innerHTML = cells.map(c => '<div class="cellv"><span class="k">' + c[0] + '</span><span class="v">' + c[1] + '</span></div>').join('');
-    $('formula').textContent = '灯油1Lは ' + fmt(r.perL, 1) + ' 円（' + fmt(state.price18, 0) + '円 ÷ 18L）。1か月は30日として、毎日同じ時間使った場合です。';
+    const priceBasis = priceUnit.value === '18' ? '（' + fmx(state.price18, 4) + '円 ÷ 18L）' : '';
+    $('formula').textContent = '灯油1Lは ' + fmx(r.perL, 4) + ' 円' + priceBasis + '。1か月は30日として、毎日同じ時間使った場合です。';
   }
 
   function resultText(){
+    if(read().length) return '';
     const r = calc(state.max, state.min, state.p, state.hours, state.price18);
     if(!(r.perDay > 0)) return '';
+    const priceText = priceUnit.value === '1' ? fmx(r.perL, 4) + ' 円/L' : fmx(state.price18, 4) + ' 円/18L';
     return ['【灯油の計算】',
       '燃料消費量 ' + fmt(r.rate, 3) + ' L/h（強 ' + fmx(Math.max(state.max, state.min), 3) + '・弱 ' + fmx(Math.min(state.max, state.min), 3) + '・火力の目盛り ' + state.p + '）',
       '1日 ' + fmx(state.hours, 2) + ' 時間 → 1日 ' + fmt(r.perDay, 2) + ' L',
       '18Lがもつ日数：' + (r.days18 >= 1000 ? '1,000日以上' : r.days18 < 1 ? '1日もちません（約 ' + fmt(r.hours18, 1) + ' 時間）' : '約 ' + fmt(r.days18, 1) + ' 日'),
-      '灯油 ' + fmt(state.price18, 0) + ' 円/18L → 1日 ' + yen(r.costDay) + '・30日 ' + yen(r.cost30)
+      '灯油 ' + priceText + ' → 1日 ' + yen(r.costDay) + '・30日 ' + yen(r.cost30)
     ].join('\n');
   }
   function flash(msg){ const f = $('feedback'); f.textContent = msg; clearTimeout(f._t); f._t = setTimeout(() => { f.textContent = ''; }, 5000); }
@@ -308,6 +324,12 @@
 
   /* ---------- 操作 ---------- */
   ['rateMax','rateMin','hours','price18'].forEach(id => { $(id).addEventListener('input', render); $(id).addEventListener('change', render); });
+  priceUnit.addEventListener('change', () => {
+    priceInputs[activePriceUnit] = priceInput.value;
+    activePriceUnit = priceUnit.value;
+    priceInput.value = priceInputs[activePriceUnit];
+    render();
+  });
   $('power').addEventListener('input', render);
   $('copyBtn').addEventListener('click', () => copyText(resultText(), '結果をコピーしました。'));
   $('noteLink').href = NOTE_URL;
